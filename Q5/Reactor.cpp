@@ -2,7 +2,6 @@
 #include <iostream>
 #include <poll.h>
 #include <unistd.h>
-#include <thread>
 #include <mutex>
 #include <vector>
 #include <unordered_map>
@@ -22,7 +21,6 @@ void* Reactor::start() {
 }
 
 int Reactor::addFd(int fd, reactorFunc func) {
-    std::lock_guard<std::mutex> lock(mutex);
     if (fd_map.find(fd) != fd_map.end()) return -1; // fd already exists
     struct pollfd pfd = { fd, POLLIN, 0 };
     fds.push_back(pfd);
@@ -31,7 +29,6 @@ int Reactor::addFd(int fd, reactorFunc func) {
 }
 
 int Reactor::removeFd(int fd) {
-    std::lock_guard<std::mutex> lock(mutex);
     auto it = fd_map.find(fd);
     if (it == fd_map.end()) return -1; // fd doesn't exist
     fd_map.erase(it);
