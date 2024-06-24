@@ -20,22 +20,6 @@
 GraphMatrix* ptrGraph = nullptr;
 Reactor* reactor = nullptr;
 
-void test()
-{
-    GraphMatrix graph(5);
-    ptrGraph = &graph;
-    graph.addEdge(0, 1);
-    graph.addEdge(1, 2);
-    graph.addEdge(2, 3);
-    graph.addEdge(3, 4);
-    graph.addEdge(4, 0);
-    graph.addEdge(1, 4);
-    graph.addEdge(4, 2);
-    graph.addEdge(3, 1);
-    graph.addEdge(2, 0);
-    graph.addEdge(0, 3);
-}
-
 void *get_in_addr(struct sockaddr *sa) {
     if (sa->sa_family == AF_INET) {
         return &(((struct sockaddr_in*)sa)->sin_addr);
