@@ -83,13 +83,17 @@ void del_from_pfds(struct pollfd pfds[], int i, int *fd_count) {
     (*fd_count)--;
 }
 
-void handle_new_graph(int sender_fd, char *buf, struct pollfd& pfds, int fd_count, int listener, GraphMatrix* &ptrGraph, int n, int m){
-    
+void handle_new_graph(int sender_fd, struct pollfd& pfds, GraphMatrix* &ptrGraph, int n, int m){
+    char buf[256];
     int numBytes;
     int count = m;
 
     while(count > 0)
     {
+        std::string msg = "Enter edge: ";
+        send(sender_fd, msg.c_str(), msg.size(), 0);
+
+        memset(buf, 0, sizeof(buf)); // clear the buffer
         numBytes = recv(pfds.fd, buf, sizeof(buf), 0);
         if(numBytes <= 0){
             std::string msg = "Failed to receive data for edges\n";
@@ -100,17 +104,33 @@ void handle_new_graph(int sender_fd, char *buf, struct pollfd& pfds, int fd_coun
         std::istringstream iss(std::string(buf, numBytes));
         int ver1, ver2;
         iss >> ver1 >> ver2;
-        if (ver1 > 0 && ver2 > 0 && ver1 <= n && ver2 <= n) {
-                ptrGraph->addEdge(ver1 - 1, ver2 - 1);
-                std::string msg = "Edge added between " + std::to_string(ver1) + " and " + std::to_string(ver2) + "\n";
-                send(sender_fd, msg.c_str(), msg.size(), 0);
-                count--;
+
+        if (ver1 > 0 && ver2 > 0 && ver1 <= n && ver2 <= n) {    
+            ptrGraph->addEdge(ver1 - 1, ver2 - 1);
+            count--;
+        
         } else {
             std::string msg = "Invalid edge\n";
             send(sender_fd, msg.c_str(), msg.size(), 0);
-            return;
+            continue;
         }
     }
+}
+
+void handle_kosaraju(int sender_fd, GraphMatrix* &ptrGraph)
+{
+    std::vector<std::vector<int>> SCCs = ptrGraph->getSCCs();
+    std::ostringstream oss;
+    
+    for (const auto &component : SCCs) {
+        for (size_t i = 0; i < component.size(); i++) {
+            oss << component[i] + 1;
+            if (i != component.size() - 1) oss << " ";
+        }
+        oss << "\n";
+    }
+    std::string msg = oss.str();
+    send(sender_fd, msg.c_str(), msg.size(), 0);
 }
 
 void handle_client_message(int sender_fd, char *buf, int nbytes, struct pollfd& pfds, int fd_count, int listener, GraphMatrix* &ptrGraph) {
@@ -122,13 +142,16 @@ void handle_client_message(int sender_fd, char *buf, int nbytes, struct pollfd& 
 
     if (command == "Newgraph") {
         int n, m;
+        
         if (iss >> n >> m && n > 0 && m > 0) {
             delete ptrGraph;
             ptrGraph = new GraphMatrix(n);
-            handle_new_graph(sender_fd, buf, pfds, fd_count, listener, ptrGraph, n, m);
+            
+            handle_new_graph(sender_fd, pfds, ptrGraph, n, m);
             
             std::string msg = "Graph created with " + std::to_string(n) + " vertices and " + std::to_string(m) + " edges\n";
             send(sender_fd, msg.c_str(), msg.size(), 0);
+        
         } else {
             std::string msg = "Invalid command for Newgraph\n";
             send(sender_fd, msg.c_str(), msg.size(), 0);
@@ -136,18 +159,7 @@ void handle_client_message(int sender_fd, char *buf, int nbytes, struct pollfd& 
 
     } else if (command == "Kosaraju") {
         if (ptrGraph) {
-            std::vector<std::vector<int>> SCCs = ptrGraph->getSCCs();
-            std::ostringstream oss;
-            
-            for (const auto &component : SCCs) {
-                for (size_t i = 0; i < component.size(); i++) {
-                    oss << component[i] + 1;
-                    if (i != component.size() - 1) oss << " ";
-                }
-                oss << "\n";
-            }
-            std::string msg = oss.str();
-            send(sender_fd, msg.c_str(), msg.size(), 0);
+            handle_kosaraju(sender_fd, ptrGraph);
         
         } else {
             std::string msg = "Graph not initialized.\n";
@@ -156,7 +168,9 @@ void handle_client_message(int sender_fd, char *buf, int nbytes, struct pollfd& 
 
     } else if (command == "Newedge") {
         int i, j;
+
         if (iss >> i >> j && i > 0 && j > 0) {
+            
             if (ptrGraph) {
                 ptrGraph->addEdge(i - 1, j - 1);
                 std::string msg = "Edge added between " + std::to_string(i) + " and " + std::to_string(j) + "\n";

@@ -50,8 +50,6 @@ int Reactor::stop() {
 }
 
 // Reactor thread function
-// Note becuase we are working on 1 Thread We dont need to lock the mutex
-// Since only 1 thread is running at a time.
 void Reactor::run() {
     while (running) {
         
