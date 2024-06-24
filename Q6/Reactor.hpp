@@ -29,7 +29,6 @@ private:
     std::vector<pollfd> fds;
     std::unordered_map<int, reactorFunc> fd_map;
     std::thread reactor_thread;
-    std::mutex mutex;
     bool running;
 };
 
