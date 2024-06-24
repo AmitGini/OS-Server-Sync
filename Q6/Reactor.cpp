@@ -41,6 +41,7 @@ int Reactor::removeFd(int fd) {
     if (it == fd_map.end()) return -1; // fd doesn't exist
     fd_map.erase(it);
     fds.erase(std::remove_if(fds.begin(), fds.end(), [fd](pollfd& pfd) { return pfd.fd == fd; }), fds.end());
+    close(fd);
     return 0;
 }
 
@@ -52,9 +53,11 @@ int Reactor::stop() {
 }
 
 // Reactor thread function
+// Note becuase we are working on 1 Thread We dont need to lock the mutex
+// Since only 1 thread is running at a time.
 void Reactor::run() {
     while (running) {
-        std::lock_guard<std::mutex> lock(mutex);
+        
         int ret = poll(fds.data(), fds.size(), 1000); // timeout 1s
         if (ret < 0) {
             std::cerr << "poll error: " << strerror(errno) << std::endl;

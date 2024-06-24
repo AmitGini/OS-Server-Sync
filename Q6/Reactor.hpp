@@ -33,5 +33,4 @@ private:
     bool running;
 };
 
-
 #endif 
