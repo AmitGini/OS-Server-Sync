@@ -1,34 +1,29 @@
 #ifndef REACTOR_HPP
 #define REACTOR_HPP
+
 #include <vector>
 #include <unordered_map>
 #include <poll.h>
-#include <thread>
 #include <functional>
+#include <pthread.h>
 
 typedef std::function<void(int)> reactorFunc;
 
-class Reactor {
-public:
-    Reactor();
-    ~Reactor();
-    
-    // initializes and starts the reactor in a separate thread.
-    void* start();
-    // adds a file descriptor and its callback to the reactor.
-    int addFd(int fd, reactorFunc func);  
-    // removes a file descriptor from the reactor.
-    int removeFd(int fd);
-    // stops the reactor and joins the thread.
-    int stop();
+extern std::vector<pollfd> fds;
+extern std::unordered_map<int, reactorFunc> fd_map;
+extern pthread_t reactor_thread;
+extern bool running;
 
-private:
-    void run();
+// initializes and starts the reactor in a separate thread.
+void* startReactor();
 
-    std::vector<pollfd> fds;
-    std::unordered_map<int, reactorFunc> fd_map;
-    std::thread reactor_thread;
-    bool running;
-};
+// adds a file descriptor and its callback to the reactor.
+int addFdToReactor(int fd, reactorFunc func);
+
+// removes a file descriptor from the reactor.
+int removeFdFromReactor(int fd);
+
+// stops the reactor and joins the thread.
+int stopReactor();
 
 #endif 

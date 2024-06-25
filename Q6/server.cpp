@@ -17,9 +17,8 @@
 
 #define PORT "9034"
 GraphMatrix* ptrGraph = nullptr;
-Reactor* reactor = nullptr;
 
-void *get_in_addr(struct sockaddr *sa) {
+void* get_in_addr(struct sockaddr* sa) {
     if (sa->sa_family == AF_INET) {
         return &(((struct sockaddr_in*)sa)->sin_addr);
     }
@@ -71,8 +70,6 @@ int get_listener_socket(void) {
     return listener;
 }
 
-
-
 void handle_client_message(int fd) {
     try {
         char buf[256];
@@ -84,24 +81,21 @@ void handle_client_message(int fd) {
                 perror("recv");
             }
             close(fd);
-            reactor->removeFd(fd);
+            removeFdFromReactor(fd);
         } else {
             std::istringstream iss(std::string(buf, nbytes));
             std::string command;
             iss >> command;
 
-
             if (command == "Newgraph") {
                 int n, m;
                 iss >> n >> m;
-        
+
                 if (n > 0 && m > 0) {
-                    
                     delete ptrGraph;
                     ptrGraph = new GraphMatrix(n);
-                    
+
                     for (int size = 0; size < m; size++) {
-                    
                         ssize_t bytes_sent = send(fd, "Enter edge: ", 13, 0);
                         if (bytes_sent == -1) {
                             throw std::runtime_error("Error sending message to client");
@@ -110,20 +104,17 @@ void handle_client_message(int fd) {
                         memset(buf, 0, sizeof(buf)); // Clear the buffer before receiving new data
                         nbytes = recv(fd, buf, sizeof(buf), 0); // Wait for the client to send edge data
                         if (nbytes > 0) {
-                        
                             std::istringstream edgeStream(std::string(buf, nbytes));
                             int ver1, ver2;
                             edgeStream >> ver1 >> ver2; // Parse the vertices from the received data
-                        
+
                             if (ver1 > 0 && ver2 > 0 && ver1 <= n && ver2 <= n) {
                                 ptrGraph->addEdge(ver1 - 1, ver2 - 1);
-                        
                             } else {
                                 std::string msg = "Invalid edge\n";
                                 send(fd, msg.c_str(), msg.size(), 0);
                                 return;
                             }
-                        
                         } else {
                             // Handle error or disconnection
                             std::string msg = "Error receiving edge or client disconnected\n";
@@ -134,17 +125,15 @@ void handle_client_message(int fd) {
 
                     std::string msg = "Graph created with " + std::to_string(n) + " vertices and " + std::to_string(m) + " edges\n";
                     send(fd, msg.c_str(), msg.size(), 0);
-                
                 } else {
                     std::string msg = "Invalid command for Newgraph\n";
                     send(fd, msg.c_str(), msg.size(), 0);
                 }
-
             } else if (command == "Kosaraju") {
                 if (ptrGraph) {
                     std::vector<std::vector<int>> SCCs = ptrGraph->getSCCs();
                     std::ostringstream oss;
-                    for (const auto &component : SCCs) {
+                    for (const auto& component : SCCs) {
                         for (size_t i = 0; i < component.size(); i++) {
                             oss << component[i] + 1;
                             if (i != component.size() - 1) oss << " ";
@@ -191,7 +180,7 @@ void handle_client_message(int fd) {
                 std::string msg = "Goodbye\n";
                 send(fd, msg.c_str(), msg.size(), 0);
                 close(fd);
-                reactor->removeFd(fd);
+                removeFdFromReactor(fd);
             } else {
                 std::string msg = "Invalid command\n";
                 send(fd, msg.c_str(), msg.size(), 0);
@@ -200,28 +189,25 @@ void handle_client_message(int fd) {
     } catch (const std::exception& e) {
         std::cerr << "Exception in handle_client_message: " << e.what() << std::endl;
         close(fd);
-        reactor->removeFd(fd);
+        removeFdFromReactor(fd);
     }
 }
 
 void start_chat(int client_fd) {
-    //First message to the client
+    // First message to the client
     std::string startConversation = "**** Start chat ****:\n";
     ssize_t bytes_sent = send(client_fd, startConversation.c_str(), startConversation.size(), 0);
     if (bytes_sent == -1) {
         perror("send");
         close(client_fd);
-        
     } else {
-            //Test check that message has arrived
-            printf("Sent start message to client on socket %d\n", client_fd);
-            // In the main function, where client sockets are added to the reactor
-            if (reactor->addFd(client_fd, std::bind(handle_client_message, std::placeholders::_1)) == -1) {
-                fprintf(stderr, "Failed to add client socket to reactor\n");
-                close(client_fd);
-            }
-            
-            
+        // Test check that message has arrived
+        printf("Sent start message to client on socket %d\n", client_fd);
+        // In the main function, where client sockets are added to the reactor
+        if (addFdToReactor(client_fd, handle_client_message) == -1) {
+            fprintf(stderr, "Failed to add client socket to reactor\n");
+            close(client_fd);
+        }
     }
 }
 
@@ -233,29 +219,22 @@ int main(void) {
     }
     printf("Listener socket created: %d\n", listener);
 
-    reactor = new Reactor();
-    reactor->start();
-    if (!reactor) {
-        fprintf(stderr, "Failed to start reactor\n");
-        exit(1);
-    }
+    startReactor();
     printf("Reactor started\n");
-    
-    if (reactor->addFd(listener, [=](int fd) {
+
+    if (addFdToReactor(listener, [](int fd) {
         struct sockaddr_storage remoteaddr;
         socklen_t addrlen = sizeof(remoteaddr);
         int listener = fd;
         int client_fd = accept(listener, (struct sockaddr*)&remoteaddr, &addrlen);
         if (client_fd == -1) {
             perror("accept");
-        
         } else {
-
-            //Test check printing
+            // Test check printing
             char remoteIP[INET6_ADDRSTRLEN];
-            printf("pollserver: new connection from %s on socket %d\n", inet_ntop(remoteaddr.ss_family,
-            get_in_addr((struct sockaddr*)&remoteaddr),remoteIP, INET6_ADDRSTRLEN),client_fd);
-            
+            printf("pollserver: new connection from %s on socket %d\n",
+                   inet_ntop(remoteaddr.ss_family, get_in_addr((struct sockaddr*)&remoteaddr), remoteIP, INET6_ADDRSTRLEN), client_fd);
+
             start_chat(client_fd);
         }
     }) == -1) {
@@ -274,6 +253,7 @@ int main(void) {
     } catch (const std::exception& e) {
         std::cerr << "Exception: " << e.what() << std::endl;
     }
-    
+
+    stopReactor();
     return 0;
 }
