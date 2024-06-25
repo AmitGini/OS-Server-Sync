@@ -4,7 +4,6 @@
 #include <unordered_map>
 #include <poll.h>
 #include <thread>
-#include <mutex>
 #include <functional>
 
 typedef std::function<void(int)> reactorFunc;

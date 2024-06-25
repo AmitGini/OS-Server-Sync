@@ -3,7 +3,7 @@ CXX = g++
 CXXFLAGS = -std=c++11 -Wall -pthread
 
 # Source files
-SRCS = GraphMatrix.cpp PollServerChat.cpp Reactor.cpp 
+SRCS = GraphMatrix.cpp server.cpp Reactor.cpp 
 
 # Object files
 OBJS = $(SRCS:.cpp=.o)

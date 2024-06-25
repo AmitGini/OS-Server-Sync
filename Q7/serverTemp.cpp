@@ -20,7 +20,6 @@
 
 pthread_mutex_t graph_mutex = PTHREAD_MUTEX_INITIALIZER;
 GraphMatrix* ptrGraph = nullptr;
-size_t numThreads = 0;
 
 void *get_in_addr(struct sockaddr *sa) {
     if (sa->sa_family == AF_INET) {
@@ -41,7 +40,7 @@ int get_listener_socket(void) {
     hints.ai_socktype = SOCK_STREAM;
     hints.ai_flags = AI_PASSIVE;
     if ((rv = getaddrinfo(NULL, PORT, &hints, &ai)) != 0) {
-        fprintf(stderr, "server: %s\n", gai_strerror(rv));
+        fprintf(stderr, "selectserver: %s\n", gai_strerror(rv));
         exit(1);
     }
 
@@ -72,43 +71,52 @@ int get_listener_socket(void) {
     return listener;
 }
 
-void handle_new_graph(int sender_fd, GraphMatrix* &ptrGraph, int n, int m){
-    try{
-        char buf[256];
-        int numBytes;
-        int count = m;
-
-        while(count > 0) {
-            std::string msg = "Enter edge: ";
-            send(sender_fd, msg.c_str(), msg.size(), 0);
-
-            memset(buf, 0, sizeof(buf)); // clear the buffer
-            numBytes = recv(sender_fd, buf, sizeof(buf), 0);
-            if(numBytes < 0) {
-                std::string msg = "Failed to receive data for edges\n";
-                send(sender_fd, msg.c_str(), msg.size(), 0);
-                continue;
-            }else if(numBytes == 0){
-                throw std::runtime_error("Connection closed by client when creating graph");
-            }
-            
-            std::istringstream iss(std::string(buf, numBytes));
-            int ver1, ver2;
-            iss >> ver1 >> ver2;
-
-            if (ver1 > 0 && ver2 > 0 && ver1 <= n && ver2 <= n) {
-                ptrGraph->addEdge(ver1 - 1, ver2 - 1);
-                count--;
-            } else {
-                std::string msg = "Invalid edge\n";
-                send(sender_fd, msg.c_str(), msg.size(), 0);
-                continue;
-            }
-        }
+void add_to_pfds(struct pollfd *pfds[], int newfd, int *fd_count, int *fd_size) {
+    if (*fd_count == *fd_size) {
+        *fd_size *= 2;
+        *pfds = (pollfd*)realloc(*pfds, sizeof(**pfds) * (*fd_size));
     }
-    catch(std::exception &e){
-        std::cout<<"\nException in handle_new_graph: "<<e.what()<<std::endl;
-        return;
+
+    (*pfds)[*fd_count].fd = newfd;
+    (*pfds)[*fd_count].events = POLLIN;
+    (*fd_count)++;
+}
+
+void del_from_pfds(struct pollfd pfds[], int i, int *fd_count) {
+    pfds[i] = pfds[*fd_count - 1];
+    (*fd_count)--;
+}
+
+void handle_new_graph(int sender_fd, GraphMatrix* &ptrGraph, int n, int m){
+    char buf[256];
+    int numBytes;
+    int count = m;
+
+    while(count > 0) {
+        std::string msg = "Enter edge: ";
+        send(sender_fd, msg.c_str(), msg.size(), 0);
+
+        memset(buf, 0, sizeof(buf)); // clear the buffer
+        numBytes = recv(sender_fd, buf, sizeof(buf), 0);
+        if(numBytes <= 0) {
+            std::string msg = "Failed to receive data for edges\n";
+            send(sender_fd, msg.c_str(), msg.size(), 0);
+            return;
+        }
+        
+        std::istringstream iss(std::string(buf, numBytes));
+        int ver1, ver2;
+        iss >> ver1 >> ver2;
+
+        if (ver1 > 0 && ver2 > 0 && ver1 <= n && ver2 <= n) {
+            
+            ptrGraph->addEdge(ver1 - 1, ver2 - 1);
+            count--;
+        } else {
+            std::string msg = "Invalid edge\n";
+            send(sender_fd, msg.c_str(), msg.size(), 0);
+            continue;
+        }
     }
 }
 
@@ -203,10 +211,7 @@ void* handle_client_message(void* arg) {
         } else if (command == "Exit") {
             std::string msg = "Goodbye\n";
             send(sender_fd, msg.c_str(), msg.size(), 0);
-            close(sender_fd);
-            std::cout<<"Client Thread Closed: "<<numThreads<<std::endl;
-            numThreads--;
-            return nullptr;
+            break;
 
         } else {
             std::string msg = "Invalid command\n";
@@ -216,39 +221,57 @@ void* handle_client_message(void* arg) {
 
     if (nbytes == 0) {
         printf("pollserver: socket %d hung up\n", sender_fd);
-        close(sender_fd);
-        numThreads--;
     } else {
         perror("recv");
     }
 
+    close(sender_fd);
     return nullptr;
 }
 
-void* accept_connections(void* arg) {
-    int listener_fd = *(int*)arg;
+void* poll_thread_func(void* arg) {
+    struct pollfd* pfds = (struct pollfd*)arg;
+    int fd_count = 1;
+    int fd_size = 5;
+
     for (;;) {
-        struct sockaddr_storage remoteaddr;
-        socklen_t addrlen = sizeof remoteaddr;
-        int newfd = accept(listener_fd, (struct sockaddr *)&remoteaddr, &addrlen);
-        if (newfd == -1) {
-            perror("accept");
-            continue;
+        int poll_count = poll(pfds, fd_count, -1);
+
+        if (poll_count == -1) {
+            perror("poll");
+            exit(1);
         }
 
-        char remoteIP[INET6_ADDRSTRLEN];
-        printf("\npollserver: new connection from %s on socket %d\n",
-               inet_ntop(remoteaddr.ss_family, get_in_addr((struct sockaddr*)&remoteaddr), remoteIP, INET6_ADDRSTRLEN), newfd);
-        std::string startConversation = "**** Start chat ****:\n";
-        send(newfd, startConversation.c_str(), startConversation.size(), 0);
+        for (int i = 0; i < fd_count; i++) {
+            if (pfds[i].revents & POLLIN) {
+                if (pfds[i].fd == pfds[0].fd) {  // New connection
+                    struct sockaddr_storage remoteaddr;
+                    socklen_t addrlen = sizeof remoteaddr;
+                    int newfd = accept(pfds[0].fd, (struct sockaddr *)&remoteaddr, &addrlen);
 
-        int* client_fd = new int(newfd);
-        pthread_t client_thread;
-        pthread_create(&client_thread, nullptr, handle_client_message, client_fd);
-        std::cout<<"Client Thread Created: "<<++numThreads<<std::endl;
-        pthread_detach(client_thread); // don't wait for the thread to finish - it's detached (can be locked using mutex)
-        
+                    if (newfd == -1) {
+                        perror("accept");
+                    } else {
+                        add_to_pfds(&pfds, newfd, &fd_count, &fd_size);
+                        char remoteIP[INET6_ADDRSTRLEN];
+                        printf("pollserver: new connection from %s on socket %d\n",
+                               inet_ntop(remoteaddr.ss_family, get_in_addr((struct sockaddr*)&remoteaddr), remoteIP, INET6_ADDRSTRLEN), newfd);
+                        std::string startConversation = "**** Start chat ****:\n";
+                        send(newfd, startConversation.c_str(), startConversation.size(), 0);
+                    }
+                } else {  // Existing connection
+                    int sender_fd = pfds[i].fd;
+                    int* client_fd = new int(sender_fd);
+                    pthread_t client_thread;
+                    pthread_create(&client_thread, nullptr, handle_client_message, client_fd);
+                    pthread_detach(client_thread);
+
+                    del_from_pfds(pfds, i, &fd_count);
+                }
+            }
+        }
     }
+
     return nullptr;
 }
 
@@ -258,18 +281,18 @@ int main(void) {
         fprintf(stderr, "error getting listening socket\n");
         exit(1);
     }
-    std::cout<<"Listener Created"<<std::endl;
-    pthread_t accept_thread;
-    pthread_create(&accept_thread, nullptr, accept_connections, &listener);
-    
-    std::cout<<"Accept Thread Created, Thread Number: "<<++numThreads<<std::endl;
-    pthread_join(accept_thread, nullptr);
-    --numThreads;
-    std::cout<<"Accept Thread Joined - Terminated"<<std::endl;
-    close(listener);
-    std::cout<<"Listener Closed"<<std::endl;
+
+    int fd_size = 5;
+    struct pollfd* pfds = (pollfd*)malloc(sizeof *pfds * fd_size);
+    pfds[0].fd = listener;
+    pfds[0].events = POLLIN;
+
+    pthread_t poll_thread;
+    pthread_create(&poll_thread, nullptr, poll_thread_func, pfds);
+    pthread_join(poll_thread, nullptr);
+
+    free(pfds);
     pthread_mutex_destroy(&graph_mutex);
-    std::cout<<"Mutex Destroyed"<<std::endl;
 
     return 0;
 }
