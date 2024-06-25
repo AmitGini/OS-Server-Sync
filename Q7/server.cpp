@@ -110,6 +110,10 @@ void handle_new_graph(int sender_fd, GraphMatrix* &ptrGraph, int n, int m){
         std::cout<<"\nException in handle_new_graph: "<<e.what()<<std::endl;
         return;
     }
+    catch(...){
+        std::cout<<"\nException in handle_new_graph"<<std::endl;
+        return;
+    }
 }
 
 void handle_kosaraju(int sender_fd, GraphMatrix* &ptrGraph) {
@@ -155,10 +159,13 @@ void* handle_client_message(void* arg) {
                 std::string msg = "Invalid command for Newgraph\n";
                 send(sender_fd, msg.c_str(), msg.size(), 0);
             }
+            
 
         } else if (command == "Kosaraju") {
             if (ptrGraph) {
+                pthread_mutex_lock(&graph_mutex);
                 handle_kosaraju(sender_fd, ptrGraph);
+                pthread_mutex_unlock(&graph_mutex);
             } else {
                 std::string msg = "Graph not initialized.\n";
                 send(sender_fd, msg.c_str(), msg.size(), 0);
@@ -181,6 +188,7 @@ void* handle_client_message(void* arg) {
                 std::string msg = "Invalid command for Newedge\n";
                 send(sender_fd, msg.c_str(), msg.size(), 0);
             }
+
 
         } else if (command == "Removeedge") {
             int i, j;

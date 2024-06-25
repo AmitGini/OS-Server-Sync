@@ -1,30 +1,41 @@
 #include "Reactor.hpp"
 #include <iostream>
-#include <poll.h>
 #include <unistd.h>
-#include <thread>
-#include <vector>
-#include <unordered_map>
 #include <algorithm>
 #include <cstring>
 
-// Constructor
-Reactor::Reactor() : running(false) {}
+std::vector<pollfd> fds;
+std::unordered_map<int, reactorFunc> fd_map;
+pthread_t reactor_thread;
+bool running = false;
 
-// Destructor
-Reactor::~Reactor() {
-    stop();
+void* reactorRun(void* arg) {
+    while (running) {
+        int ret = poll(fds.data(), fds.size(), 1000); // timeout 1s
+        if (ret < 0) {
+            std::cerr << "poll error: " << strerror(errno) << std::endl;
+            return nullptr;
+        }
+
+        for (auto& pfd : fds) {
+            if (pfd.revents & POLLIN) {
+                auto it = fd_map.find(pfd.fd);
+                if (it != fd_map.end()) {
+                    it->second(pfd.fd);
+                }
+            }
+        }
+    }
+    return nullptr;
 }
 
-// Start the reactor in a separate thread
-void* Reactor::start() {
+void* startReactor() {
     running = true;
-    reactor_thread = std::thread(&Reactor::run, this);
-    return this;
+    pthread_create(&reactor_thread, nullptr, reactorRun, nullptr);
+    return nullptr;
 }
 
-// Add a file descriptor and its callback to the reactor
-int Reactor::addFd(int fd, reactorFunc func) {
+int addFdToReactor(int fd, reactorFunc func) {
     if (fd_map.find(fd) != fd_map.end()) return -1; // fd already exists
     struct pollfd pfd = { fd, POLLIN, 0 };
     fds.push_back(pfd);
@@ -32,8 +43,7 @@ int Reactor::addFd(int fd, reactorFunc func) {
     return 0;
 }
 
-// Remove a file descriptor from the reactor
-int Reactor::removeFd(int fd) {
+int removeFdFromReactor(int fd) {
     auto it = fd_map.find(fd);
     if (it == fd_map.end()) return -1; // fd doesn't exist
     fd_map.erase(it);
@@ -42,31 +52,10 @@ int Reactor::removeFd(int fd) {
     return 0;
 }
 
-// Stop the reactor and join(wait) the thread
-int Reactor::stop() {
+int stopReactor() {
     running = false;
-    if (reactor_thread.joinable()) reactor_thread.join();
+    if (pthread_join(reactor_thread, nullptr) != 0) {
+        return -1;
+    }
     return 0;
 }
-
-// Reactor thread function
-void Reactor::run() {
-    while (running) {
-        
-        int ret = poll(fds.data(), fds.size(), 1000); // timeout 1s
-        if (ret < 0) {
-            std::cerr << "poll error: " << strerror(errno) << std::endl;
-            return;
-        }
-        for (auto& pfd : fds) {
-            if (pfd.revents & POLLIN) {
-                auto it = fd_map.find(pfd.fd);
-                if (it != fd_map.end()) {
-                    it->second(pfd.fd); // Call the associated function
-                }
-            }
-        }
-    }
-}
-
-

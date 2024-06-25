@@ -1,44 +1,97 @@
 #include "Reactor.hpp"
 #include <iostream>
+#include <netinet/in.h>
+#include <arpa/inet.h>
 #include <unistd.h>
+#include <netdb.h>
 
-void handleFd(int fd) {
+#define PORT 9034
+
+void handleClient(int client_fd) {
     char buffer[1024];
-    int bytes = read(fd, buffer, sizeof(buffer));
-    if (bytes > 0) {
-        std::cout << "Read " << bytes << " bytes from fd " << fd << std::endl;
+
+    ssize_t bytes_recv = recv(client_fd, buffer, sizeof(buffer), 0);
+    if (bytes_recv > 0) {
+        buffer[bytes_recv] = '\0';
+        std::cout << "Received: " << buffer << std::endl;
+        std::string response = "Server got your message\n";
+        send(client_fd, response.c_str(), response.size(), 0);
+    } else {
+        std::cerr << "Client disconnected" << std::endl;
+        removeFdFromReactor(client_fd);
     }
 }
 
-int main() {
-    int fds[2];
-    pipe(fds);
-
-    Reactor* r = new Reactor();
-    r->start();
-    r->addFd(fds[0], handleFd);
-
-    // Simulate writing to the pipe
-    ssize_t bytesWritten = write(fds[1], "Hello, Reactor!", 15);
-
-    if (bytesWritten == -1) {
-        std::cerr << "Error writing to pipe." << std::endl;
-        // Handle the error here
-    } else {
-        r->addFd(fds[1], handleFd);
-        fprintf(stderr, "Wrote %ld bytes to the pipe.\n", bytesWritten);
-        // std::cout << "Wrote " << bytesWritten << " bytes to the pipe." << std::endl;
+int getListenerSocket() {
+    int listener;
+    struct sockaddr_in addr;
+    listener = socket(AF_INET, SOCK_STREAM, 0);
+    if (listener == -1) {
+        perror("socket");
+        return -1;
     }
 
-    // Allow some time for the reactor to handle the event
-    sleep(0.0009);
+    int yes = 1;
+    if (setsockopt(listener, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int)) == -1) {
+        perror("setsockopt");
+        return -1;
+    }
 
-    r->removeFd(fds[0]); //also close fds[0]
-    r->removeFd(fds[1]);  //also close fds[1]
-    r->stop();
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = INADDR_ANY;
+    addr.sin_port = htons(PORT);
 
-    close(fds[0]);
-    close(fds[1]);
-    delete r;
+    if (bind(listener, (struct sockaddr *)&addr, sizeof(addr)) == -1) {
+        perror("bind");
+        return -1;
+    }
+
+    if (listen(listener, 10) == -1) {
+        perror("listen");
+        return -1;
+    }
+
+    return listener;
+}
+
+int main() {
+    int listener = getListenerSocket();
+    if (listener == -1) {
+        std::cerr << "Error getting listening socket" << std::endl;
+        return 1;
+    }
+
+    startReactor();
+    addFdToReactor(listener, [](int fd) {
+        struct sockaddr_storage remoteaddr;
+        socklen_t addrlen = sizeof remoteaddr;
+        int newfd = accept(fd, (struct sockaddr *)&remoteaddr, &addrlen);
+        if (newfd == -1) {
+            perror("accept");
+            return;
+        }
+
+        char remoteIP[INET6_ADDRSTRLEN];
+        void* addr;
+        if (remoteaddr.ss_family == AF_INET) {
+            struct sockaddr_in* s = (struct sockaddr_in*)&remoteaddr;
+            addr = &(s->sin_addr);
+        } else {
+            struct sockaddr_in6* s = (struct sockaddr_in6*)&remoteaddr;
+            addr = &(s->sin6_addr);
+        }
+        inet_ntop(remoteaddr.ss_family, addr, remoteIP, INET6_ADDRSTRLEN);
+        printf("\npollserver: new connection from %s on socket %d\n", remoteIP, newfd);
+
+        addFdToReactor(newfd, handleClient);
+    });
+
+    std::cout << "Reactor started. Listening for connections..." << std::endl;
+    
+    pause(); // Pause the main thread to keep the reactor running
+
+    stopReactor();
+    close(listener);
+
     return 0;
 }
