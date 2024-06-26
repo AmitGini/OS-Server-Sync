@@ -1,8 +1,3 @@
-// make all
-// ./SCC
-// gprof SCC gmon.out > analysis.txt
-// Open analysis.txt, "Flat profile"
-
 #include "GraphList.hpp"
 #include "GraphMatrix.hpp"
 #include "IOHandler.hpp"

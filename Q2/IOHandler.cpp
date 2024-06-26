@@ -1,5 +1,4 @@
 #include "IOHandler.hpp"
-#include "GraphList.hpp"
 
 #include <vector>
 #include <iostream>

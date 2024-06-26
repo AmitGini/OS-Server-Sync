@@ -3,6 +3,8 @@
 #include <unistd.h>
 #include <algorithm>
 #include <cstring>
+#include <sys/poll.h>
+#include <unordered_map>
 
 std::vector<pollfd> fds;
 std::unordered_map<int, reactorFunc> fd_map;
@@ -32,7 +34,7 @@ void* reactorRun(void* arg) {
 void* startReactor() {
     running = true;
     pthread_create(&reactor_thread, nullptr, reactorRun, nullptr);
-    return nullptr;
+    return &reactor_thread;
 }
 
 int addFdToReactor(int fd, reactorFunc func) {
