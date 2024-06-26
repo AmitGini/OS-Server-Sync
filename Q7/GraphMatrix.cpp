@@ -12,25 +12,27 @@ int GraphMatrix::getSizeV() const
     return V;
 }
 
-void GraphMatrix::addEdge(int v, int w) {
+bool GraphMatrix::addEdge(int v, int w) {
     if(V == 0 || v >= V || w >= V)
     {
         std::cout << "Invalid edge" << std::endl;
-        return;
+        return false;
     }
     adj[v][w] = 1;
     revAdj[w][v] = 1;
+    return true;
 }
 
-void GraphMatrix::removeEdge(int v, int w)
+bool GraphMatrix::removeEdge(int v, int w)
 {
     if(V == 0 || v >= V || w >= V)
     {
         std::cout << "Invalid edge" << std::endl;
-        return;
+        return false;
     }
     adj[v][w] = 0;
     revAdj[w][v] = 0;
+    return true;
 }
 
 void GraphMatrix::fillOrder(int v, std::vector<bool> &visited, std::stack<int> &Stack) {

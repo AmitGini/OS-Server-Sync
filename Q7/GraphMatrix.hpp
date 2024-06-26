@@ -16,8 +16,8 @@ class GraphMatrix {
 public:
     GraphMatrix(int V);
     int getSizeV() const;
-    void addEdge(int v, int w);
-    void removeEdge(int v, int w);
+    bool addEdge(int v, int w);
+    bool removeEdge(int v, int w);
     std::vector<std::vector<int>> getSCCs();
 };
 
