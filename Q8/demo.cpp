@@ -1,156 +1,108 @@
-#include "Proactor.hpp"
 #include "Reactor.hpp"
+#include "Proactor.hpp"
 #include <iostream>
-#include <pthread.h>
-#include <cstring>
-#include <unistd.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netdb.h>
+#include <netinet/in.h>
 #include <arpa/inet.h>
+#include <unistd.h>
+#include <cstring>
+#include <fcntl.h>
+#include <csignal>
+#include <pthread.h>
 
-#define PORT "9034"
-pthread_mutex_t shared_mutex;
-Reactor* reactor = nullptr;
+constexpr size_t PORT = 9034;
+volatile sig_atomic_t stop_server = 0; // Define stop_server
 
-int shared_sum = 0;
+void handle_sigint(int sig) {
+    stop_server = 1;
+}
 
-class Demo {
-public:
-    Demo() : listener_fd(-1) {
-        pthread_mutex_init(&shared_mutex, nullptr);
-    }
+// Function to handle client communication
+void* handleClient(int client_fd) {
+    char buffer[1024];
+    int bytes_received;
+    
 
-    ~Demo() {
-        pthread_mutex_destroy(&shared_mutex);
-    }
-
-    void run() {
-        listener_fd = get_listener_socket();
-        if (listener_fd == -1) {
-            std::cerr << "Error getting listening socket" << std::endl;
-            exit(1);
-        }
-        std::cout << "Listener Created" << std::endl;
-
-        reactor = new Reactor();
-        reactor->start();
-        std::cout << "Reactor Created and started" << std::endl;
-        
-        proactor_thread = startProactor(listener_fd, handle_client);
-        std::cout << "Proactor Thread Created" << std::endl;
-
-        reactor->addFd(listener_fd, client_reactor_func);
-        std::cout << "Listener Added to Reactor" << std::endl;
-
-        pthread_join(proactor_thread, nullptr);
-        std::cout << "Proactor Thread Joined - Terminated" << std::endl;
-        
-        reactor->stop();
-        delete reactor;
-        std::cout << "Reactor Closed" << std::endl;
-
-        close(listener_fd);
-        std::cout << "Listener Closed" << std::endl;
-    }
-
-private:
-    int listener_fd;
-    pthread_t proactor_thread;
-
-    static void* handle_client(int client_fd) {
-
-        reactor->addFd(client_fd, client_reactor_func);
-        return nullptr;
-    }
-
-    static void client_reactor_func(int client_fd) {
-        try{
-            char buf[256];
-            memset(buf, 0, sizeof(buf));
-            
-            int nbytes = recv(client_fd, buf, sizeof(buf), 0);
-            if (nbytes <= 0) {
-                if (nbytes == 0) {
-                    std::cout << "Client socket " << client_fd << " hung up" << std::endl;
-                    throw std::runtime_error("Client socket hung up");
-                } else {
-                    throw std::runtime_error("Error reading from client socket");
-                }
-            }
-
-            buf[nbytes] = '\0';
-
-            if (strcmp(buf, "add") == 0) {
-                char number_buf[256];
-                int number_bytes = recv(client_fd, number_buf, sizeof(number_buf), 0);
-                if (number_bytes > 0) {
-                    number_buf[number_bytes] = '\0';
-                    int number = std::stoi(number_buf);
-
-                    pthread_mutex_lock(&shared_mutex);
-                    shared_sum += number;
-                    std::cout << "Current Sum: " << shared_sum << std::endl;
-                    pthread_mutex_unlock(&shared_mutex);
-                }else{
-                    throw std::runtime_error("Error reading number from client socket");
-                }
-            }
-        }
-        catch (std::exception& e) {
-            std::cerr << "Exception in client_reactor_func: " << e.what() << std::endl;
+    bytes_received = recv(client_fd, buffer, sizeof(buffer) - 1, 0);
+    
+    if (bytes_received <= 0) {
+        if (bytes_received == 0) {
+            std::cout << "Client disconnected, fd: " << client_fd << std::endl;
+            removeFdFromReactor(client_fd); // Remove client from Reactor
             close(client_fd);
+            return nullptr;
+
+        } else {
+            perror("recv");
+            return nullptr;
         }
     }
+    
+    buffer[bytes_received] = '\0';
+    std::string message = buffer;
+    std::cout << "Received: " << buffer;
 
-    int get_listener_socket() {
-        int listener;
-        int yes = 1;
-        struct addrinfo hints, *ai, *p;
+    std::string response = "Server received your message: ";
+    response += message;
+    send(client_fd, response.c_str(), response.size(), 0);
 
-        memset(&hints, 0, sizeof hints);
-        hints.ai_family = AF_UNSPEC;
-        hints.ai_socktype = SOCK_STREAM;
-        hints.ai_flags = AI_PASSIVE;
-
-        int rv = getaddrinfo(nullptr, PORT, &hints, &ai);
-        if (rv != 0) {
-            fprintf(stderr, "server: %s\n", gai_strerror(rv));
-            exit(1);
-        }
-
-        for (p = ai; p != nullptr; p = p->ai_next) {
-            listener = socket(p->ai_family, p->ai_socktype, p->ai_protocol);
-            if (listener < 0) {
-                continue;
-            }
-
-            setsockopt(listener, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int));
-
-            if (bind(listener, p->ai_addr, p->ai_addrlen) < 0) {
-                close(listener);
-                continue;
-            }
-            break;
-        }
-
-        freeaddrinfo(ai);
-
-        if (p == nullptr) {
-            return -1;
-        }
-
-        if (listen(listener, 10) == -1) {
-            return -1;
-        }
-
-        return listener;
-    }
-};
+    
+    return nullptr;
+}
 
 int main() {
-    Demo demo;
-    demo.run();
+    signal(SIGINT, handle_sigint); // Register signal handler
+
+    int listener_fd = socket(AF_INET, SOCK_STREAM, 0);
+    if (listener_fd == -1) {
+        perror("socket");
+        return 1;
+    }
+
+    int enableReuseAddr = 1;
+    if (setsockopt(listener_fd, SOL_SOCKET, SO_REUSEADDR, &enableReuseAddr, sizeof(enableReuseAddr)) == -1) {
+        perror("setsockopt");
+        close(listener_fd);
+        return 1;
+    }
+
+    struct sockaddr_in server_addr;
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_addr.s_addr = INADDR_ANY;
+    server_addr.sin_port = htons(PORT);
+
+    if (bind(listener_fd, (struct sockaddr *)&server_addr, sizeof(server_addr)) == -1) {
+        perror("bind");
+        close(listener_fd);
+        return 1;
+    }
+
+    if (listen(listener_fd, 10) == -1) {
+        perror("listen");
+        close(listener_fd);
+        return 1;
+    }
+
+    std::cout << "Server is listening on port 9034" << std::endl;
+
+    // Start the Proactor to accept connections and add them to the Reactor
+    std::cout << "Starting Proactor" << std::endl;
+    pthread_t proactor_thread = startProactor(listener_fd, handleClient);
+
+    // Server loop
+    while (!stop_server) {
+        sleep(1);
+    }
+
+    // Clean up when done
+    std::cout << "Stopping Proactor" << std::endl;
+    stopProactor(proactor_thread);
+
+    std::cout << "Stopping Reactor" << std::endl;
+    stopReactor();
+
+    close(listener_fd);
+
+    std::cout << "Server stopped" << std::endl;
 
     return 0;
 }

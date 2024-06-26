@@ -1,6 +1,6 @@
 # Compiler
 CXX = g++
-CXXFLAGS = -std=c++11 -Wall -pthread
+CXXFLAGS = -g -std=c++11 -Wall -pthread
 
 # Source files
 SRCS = demo.cpp Reactor.cpp Proactor.cpp
@@ -17,14 +17,15 @@ all: $(TARGET)
 $(TARGET): $(OBJS)
 	$(CXX) $(CXXFLAGS) -o $(TARGET) $(OBJS)
 
-demo.o: demo.cpp Reactor.hpp
+demo.o: demo.cpp Reactor.hpp 
 	$(CXX) $(CXXFLAGS) -c demo.cpp
 
-Reactor.o: Reactor.cpp Reactor.hpp
+Reactor.o: Reactor.cpp Reactor.hpp 
 	$(CXX) $(CXXFLAGS) -c Reactor.cpp
 
-Proactor.o: Proactor.cpp Proactor.hpp
+Proactor.o: Proactor.cpp Proactor.hpp 
 	$(CXX) $(CXXFLAGS) -c Proactor.cpp
+
 
 # Clean rule
 .PHONY: all clean
