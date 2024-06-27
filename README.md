@@ -1,10 +1,12 @@
 # EX3 Server and Synchronization with Kosaraju Algorithm
 
-This project implements a server that can handle multiple clients to manipulate graphs and compute the Strongly Connected Components (SCCs) using the Kosaraju-Sharir algorithm. The server allows clients to create new graphs, add or remove edges, and run the Kosaraju algorithm to get SCCs. The server is implemented using Proactor and Reactor design patterns to manage multiple client connections efficiently.
+This project implements a server that can handle multiple clients to manipulate graphs and compute the Strongly Connected Components (SCCs) using the Kosaraju-Sharir algorithm. The server allows clients to create new graphs, add or remove edges, and run the Kosaraju algorithm to get SCCs. The server is implemented using Beej chat based on poll, also implemented Proactor and Reactor design patterns to manage multiple client connections and manage the the clients requests efficiently.
+The clients use shared memory, it means there is only 1 graph that can be edit or replaced, therefore the clients requests is processed using mutex.
+the project implemented in parts, therefore **Q10** is the final implemntations.
 
 ## Features
 
-- **Graph Manipulation**: Clients can create new graphs, add edges, and remove edges.
+- **Graph Manipulation**: Clients can create new graphs, add edges, remove edges, print the SCC.
 - **Kosaraju Algorithm**: Computes and returns the SCCs of the graph.
 - **Multi-client Support**: Handles multiple clients simultaneously using Proactor and Reactor patterns.
 - **SCC Notification**: Notifies when at least 50% of the graph belongs to the same SCC.
@@ -23,13 +25,13 @@ This project implements a server that can handle multiple clients to manipulate 
 
     ```sh
     git clone https://github.com/yourusername/EX3-Server-Sync-Kosaraju.git
-    cd EX3-Server-Sync-Kosaraju
+    cd EX3-Server-Sync-Kosaraju/Q10
     ```
 
 2. Compile the project:
 
     ```sh
-    g++ -pthread -o server main.cpp Proactor.cpp Reactor.cpp GraphMatrix.cpp -std=c++11
+    make all
     ```
 
 ### Running the Server
