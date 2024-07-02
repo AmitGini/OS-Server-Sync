@@ -4,14 +4,16 @@
 #include <algorithm>
 #include <iostream>
 
-
+// Constructor
 GraphMatrix::GraphMatrix(int V) : V(V), adj(V, std::vector<int>(V, 0)), revAdj(V, std::vector<int>(V, 0)) {}
 
+// Function to add an edge to the graph
 void GraphMatrix::addEdge(int v, int w) {
     adj[v][w] = 1;
     revAdj[w][v] = 1;
 }
 
+// Function to fill the stack with vertices in increasing order of finishing times (post-order)
 void GraphMatrix::fillOrder(int v, std::vector<bool> &visited, std::stack<int> &Stack) {
     visited[v] = true;
 
@@ -22,6 +24,7 @@ void GraphMatrix::fillOrder(int v, std::vector<bool> &visited, std::stack<int> &
     Stack.push(v);
 }
 
+// Function to perform DFS traversal of the reversed graph
 void GraphMatrix::DFS(int v, std::vector<bool> &visited, std::vector<int> &component) {
     visited[v] = true;
     component.push_back(v);
@@ -41,17 +44,19 @@ std::vector<std::vector<int>> GraphMatrix::getSCCs() {
             fillOrder(i, visited, Stack);
 
     std::fill(visited.begin(), visited.end(), false);
-    std::vector<std::vector<int>> SCCs;
+    std::vector<std::vector<int>> SCCs; // Strongly connected components 
 
+    // Process all vertices in order defined by Stack
     while(!Stack.empty()) {
         int v = Stack.top();
-        Stack.pop();
+        Stack.pop(); 
 
+        // If v is not visited yet, then it forms a new SCC
         if(!visited[v]) {
             std::vector<int> component;
             DFS(v, visited, component);
             std::sort(component.begin(), component.end());
-            SCCs.push_back(component);
+            SCCs.push_back(component); // Add the component to the list of strongly connected components
         }
     }
 
