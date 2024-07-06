@@ -1,7 +1,8 @@
+# Compiler
 CC = g++
+CFLAGS = -std=c++11 -g -Wall -pthread
 
-CFLAGS = -g -Wall -std=c++11
-
+# Object files
 OBJ = server.o GraphMatrix.o
 
 all: SCC
@@ -15,7 +16,9 @@ server.o: server.cpp
 GraphMatrix.o: GraphMatrix.cpp GraphMatrix.hpp
 	$(CC) $(CFLAGS) -c GraphMatrix.cpp
 
-clean:
-	rm -f *.o SCC
 
+# Clean rule
 .PHONY: all clean
+
+clean:
+	rm -f $(OBJ) SCC

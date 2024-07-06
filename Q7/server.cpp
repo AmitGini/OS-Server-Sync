@@ -17,8 +17,10 @@
 #include <pthread.h>
 
 #define PORT "9034"
+bool shutdown_flag = false; 
 
-pthread_mutex_t graph_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+pthread_mutex_t graph_mutex = PTHREAD_MUTEX_INITIALIZER; // mutex for the graph
 GraphMatrix* ptrGraph = nullptr;
 size_t numThreads = 0;
 
@@ -37,10 +39,10 @@ int get_listener_socket(void) {
     struct addrinfo hints, *ai, *p;
 
     memset(&hints, 0, sizeof hints);
-    hints.ai_family = AF_UNSPEC;
-    hints.ai_socktype = SOCK_STREAM;
-    hints.ai_flags = AI_PASSIVE;
-    if ((rv = getaddrinfo(NULL, PORT, &hints, &ai)) != 0) {
+    hints.ai_family = AF_UNSPEC; // use AF_INET6 to force IPv6
+    hints.ai_socktype = SOCK_STREAM; // TCP stream sockets
+    hints.ai_flags = AI_PASSIVE; // fill in my IP for me
+    if ((rv = getaddrinfo(NULL, PORT, &hints, &ai)) != 0) { // get address info, NULL means local address
         fprintf(stderr, "server: %s\n", gai_strerror(rv));
         exit(1);
     }
@@ -110,11 +112,11 @@ int handle_new_graph(int sender_fd, GraphMatrix* &ptrGraph, int n, int m){
         }
         return 0;
     }
-    catch(std::exception &e){
+    catch(std::exception &e){ 
         std::cout<<"\nException in handle_new_graph: "<<e.what()<<std::endl;
         return -1;
     }
-    catch(...){
+    catch(...){ // catch all other exceptions
         std::cout<<"\nException in handle_new_graph"<<std::endl;
         return -1;
     }
@@ -165,7 +167,6 @@ void* handle_client_message(void* arg) {
                     std::string msg = "Invalid command for Newgraph\n";
                     send(sender_fd, msg.c_str(), msg.size(), 0);
                 }
-                
 
             } else if (command == "Kosaraju") {
                 if (ptrGraph) {
@@ -195,6 +196,7 @@ void* handle_client_message(void* arg) {
                         std::string msg = "Graph not initialized.\n";
                         send(sender_fd, msg.c_str(), msg.size(), 0);
                     }
+                    
                 } else {
                     std::string msg = "Invalid command for Newedge\n";
                     send(sender_fd, msg.c_str(), msg.size(), 0);
@@ -232,6 +234,13 @@ void* handle_client_message(void* arg) {
                 numThreads--;
                 return nullptr;
 
+            }else if (command == "shutdown") {
+                std::cerr << "Shutdown command received, stopping server" << std::endl;
+                shutdown_flag = true; 
+                close(sender_fd);
+                std::cout<<"Client Thread Closed: "<<numThreads<<std::endl;
+                numThreads--;
+                return nullptr;
             } else {
                 std::string msg = "Invalid command\n";
                 send(sender_fd, msg.c_str(), msg.size(), 0);
@@ -255,25 +264,25 @@ void* handle_client_message(void* arg) {
 }
 
 void* accept_connections(void* arg) {
-    int listener_fd = *(int*)arg;
-    for (;;) {
-        struct sockaddr_storage remoteaddr;
-        socklen_t addrlen = sizeof remoteaddr;
+    int listener_fd = *(int*)arg; // get the listener socket from the argument
+    while (!shutdown_flag) {
+        struct sockaddr_storage remoteaddr; // client address
+        socklen_t addrlen = sizeof remoteaddr; 
         int newfd = accept(listener_fd, (struct sockaddr *)&remoteaddr, &addrlen);
         if (newfd == -1) {
             perror("accept");
             continue;
         }
 
-        char remoteIP[INET6_ADDRSTRLEN];
+        char remoteIP[INET6_ADDRSTRLEN]; // convert IP address to a string and print it
         printf("\npollserver: new connection from %s on socket %d\n",
                inet_ntop(remoteaddr.ss_family, get_in_addr((struct sockaddr*)&remoteaddr), remoteIP, INET6_ADDRSTRLEN), newfd);
         std::string startConversation = "**** Start chat ****:\n";
         send(newfd, startConversation.c_str(), startConversation.size(), 0);
 
-        int* client_fd = new int(newfd);
-        pthread_t client_thread;
-        pthread_create(&client_thread, nullptr, handle_client_message, client_fd);
+        int* client_fd = new int(newfd); // create a new int pointer to store the client file descriptor
+        pthread_t client_thread; 
+        pthread_create(&client_thread, nullptr, handle_client_message, client_fd); // create a new thread for the client
         std::cout<<"Client Thread Created: "<<++numThreads<<std::endl;
         pthread_detach(client_thread); // don't wait for the thread to finish - it's detached (can be locked using mutex)
         
@@ -292,6 +301,11 @@ int main(void) {
     pthread_create(&accept_thread, nullptr, accept_connections, &listener);
     
     std::cout<<"Accept Thread Created, Thread Number: "<<++numThreads<<std::endl;
+
+    while (!shutdown_flag) {
+        sleep(1); // Sleep for 1 second to reduce CPU usage
+    }
+    pthread_cancel(accept_thread); // Cancel the accept thread if it's still running
     pthread_join(accept_thread, nullptr);
     --numThreads;
     std::cout<<"Accept Thread Joined - Terminated"<<std::endl;
