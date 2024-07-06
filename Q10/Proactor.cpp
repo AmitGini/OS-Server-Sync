@@ -6,12 +6,12 @@
 #include <unistd.h>
 #include <cstring>
 #include <exception>
-#include <fcntl.h>
-#include <sys/select.h>
+
 
 pthread_mutex_t proactor_mutex = PTHREAD_MUTEX_INITIALIZER;
 int isServerInitStop = 0; // Initialize stop_server to 0
 int self_pipe[2]; // Self-pipe for waking up from accept
+
 
 struct Data {
     int fd;
@@ -26,7 +26,7 @@ void* get_in_addr(struct sockaddr* sa) {
 }
 
 void* acceptConnections(void* arg) {
-    int newfd = -1; // Initialize newfd to an invalid value
+      int newfd = -1; // Initialize newfd to an invalid value
     try {
         struct Data* data = reinterpret_cast<Data*>(arg); // Cast the argument to Data*
         int listen_fd = data->fd; // Declare and initialize sockfd variable
@@ -37,20 +37,20 @@ void* acceptConnections(void* arg) {
             struct sockaddr_storage remoteaddr;
             socklen_t addrlen = sizeof(remoteaddr);
 
-            fd_set readfds;
-            FD_ZERO(&readfds);
-            FD_SET(listen_fd, &readfds);
-            FD_SET(self_pipe[0], &readfds);
-            int maxfd = std::max(listen_fd, self_pipe[0]);
+            fd_set readfds; // Declare a file descriptor set
+            FD_ZERO(&readfds); // Clear the file descriptor set
+            FD_SET(listen_fd, &readfds); // Add listen_fd to the file descriptor set
+            FD_SET(self_pipe[0], &readfds); // Add self_pipe[0] to the file descriptor set
+            int maxfd = std::max(listen_fd, self_pipe[0]); // Get the maximum file descriptor 
 
-            int activity = select(maxfd + 1, &readfds, NULL, NULL, NULL);
+            int activity = select(maxfd + 1, &readfds, NULL, NULL, NULL); // Wait for activity on the file descriptors
 
-            if (activity < 0 && errno != EINTR) {
+            if (activity < 0 && errno != EINTR) { // Check for errors in select
                 perror("select error");
                 break;
             }
 
-            if (FD_ISSET(self_pipe[0], &readfds)) {
+            if (FD_ISSET(self_pipe[0], &readfds)) { // Check if self_pipe[0] is set
                 char buf[1];
                 read(self_pipe[0], buf, 1);
                 if (isServerInitStop) {
@@ -60,8 +60,8 @@ void* acceptConnections(void* arg) {
                 }
             }
 
-            if (FD_ISSET(listen_fd, &readfds)) {
-                newfd = accept(listen_fd, (struct sockaddr *)&remoteaddr, &addrlen);
+            if (FD_ISSET(listen_fd, &readfds)) { // Check if listen_fd is set
+                newfd = accept(listen_fd, (struct sockaddr *)&remoteaddr, &addrlen); // Accept a new connection
 
                 if (isServerInitStop) {
                     if (newfd != -1) close(newfd); // Close newfd if it was opened
@@ -85,7 +85,7 @@ void* acceptConnections(void* arg) {
                 pthread_t client_thread;
                 pthread_create(&client_thread, nullptr, reinterpret_cast<void* (*)(void*)>(recv), newfd_ptr);
                 pthread_detach(client_thread); // Detach the thread to prevent resource leak
-                addFdToReactor(newfd, function);
+                addFdToReactor(newfd, function); // Add newfd to the reactor for monitoring events
                 std::cout << "Client thread created" << std::endl;
             }
         }
@@ -106,19 +106,19 @@ void* acceptConnections(void* arg) {
 
 pthread_t startProactor(int listenfd, proactorFunc threadFunc) {
     pthread_t threadId;
-    Data* data = new Data{listenfd, threadFunc};
-    if (pipe(self_pipe) == -1) {
+    Data* data = new Data{listenfd, threadFunc}; 
+    if (pipe(self_pipe) == -1) { // Create a pipe for waking up from accept to send a signal to stop the server
         perror("pipe");
         exit(1);
     }
     pthread_create(&threadId, nullptr, acceptConnections, data);
-
+    
     return threadId;
 }
 
 int stopProactor(pthread_t tid) {
     isServerInitStop = 1;  // Signal all threads to stop
-    write(self_pipe[1], "x", 1); // Wake up the accept thread
+    write(self_pipe[1], "x", 1); // Write to self_pipe to wake up the accept thread
 
     close(self_pipe[0]);
     close(self_pipe[1]);
