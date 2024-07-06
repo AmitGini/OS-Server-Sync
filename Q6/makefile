@@ -3,7 +3,7 @@ CXX = g++
 CXXFLAGS = -std=c++11 -Wall -pthread
 
 # Source files
-SRCS = GraphMatrix.cpp server.cpp Reactor.cpp 
+SRCS = GraphMatrix.cpp server.cpp Reactor.cpp
 
 # Object files
 OBJS = $(SRCS:.cpp=.o)
@@ -14,7 +14,7 @@ TARGET = SCC
 # Default target
 all: $(TARGET)
 
-# Rule to link the target
+# Rule to build the target
 $(TARGET): $(OBJS)
 	$(CXX) $(CXXFLAGS) -o $(TARGET) $(OBJS)
 

@@ -8,21 +8,23 @@
 #include <cstring>
 #include <cstdio>
 #include <cstdlib>
-#include <unistd.h>
 #include <sys/types.h>
 #include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <netdb.h>
+#include <netinet/in.h> // for sockaddr_in
+#include <arpa/inet.h> // for inet_ntop
+#include <unistd.h> // for close
+#include <netdb.h> // for gethostbyname
 
 #define PORT "9034"
-GraphMatrix* ptrGraph = nullptr;
 
+GraphMatrix* ptrGraph = nullptr; // Graph object to store the graph
+
+// get sockaddr IPv4 or IPv6
 void* get_in_addr(struct sockaddr* sa) {
     if (sa->sa_family == AF_INET) {
-        return &(((struct sockaddr_in*)sa)->sin_addr);
+        return &(((struct sockaddr_in*)sa)->sin_addr); // IPv4
     }
-    return &(((struct sockaddr_in6*)sa)->sin6_addr);
+    return &(((struct sockaddr_in6*)sa)->sin6_addr); // IPv6
 }
 
 int get_listener_socket(void) {
@@ -33,20 +35,21 @@ int get_listener_socket(void) {
     struct addrinfo hints, *ai, *p;
 
     memset(&hints, 0, sizeof hints);
-    hints.ai_family = AF_UNSPEC;
-    hints.ai_socktype = SOCK_STREAM;
-    hints.ai_flags = AI_PASSIVE;
-    if ((rv = getaddrinfo(NULL, PORT, &hints, &ai)) != 0) {
-        fprintf(stderr, "selectserver: %s\n", gai_strerror(rv));
+    hints.ai_family = AF_UNSPEC; //  AF_INET6 to force IPv6
+    hints.ai_socktype = SOCK_STREAM; // TCP stream sockets
+    hints.ai_flags = AI_PASSIVE; // fill in my IP for me
+    if ((rv = getaddrinfo(NULL, PORT, &hints, &ai)) != 0) { // NULL means local host
+        fprintf(stderr, "selectserver: %s\n", gai_strerror(rv)); // getaddrinfo error
         exit(1);
     }
 
+    // loop through all the results and bind to the first we can
     for (p = ai; p != NULL; p = p->ai_next) {
         listener = socket(p->ai_family, p->ai_socktype, p->ai_protocol);
         if (listener < 0) {
             continue;
         }
-        setsockopt(listener, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int));
+        setsockopt(listener, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int)); // SOL_SOCKET is the socket layer itself, SO_REUSEADDR allows other sockets to bind() to this port, unless there is an active listening socket bound to the port already
 
         if (bind(listener, p->ai_addr, p->ai_addrlen) < 0) {
             close(listener);
@@ -73,15 +76,15 @@ int get_listener_socket(void) {
 void handle_client_message(int fd) {
     try {
         char buf[256];
-        int nbytes = recv(fd, buf, sizeof(buf), 0);
+        int nbytes = recv(fd, buf, sizeof(buf), 0); // Wait for the client to send data
         if (nbytes <= 0) {
             if (nbytes == 0) {
                 printf("pollserver: socket %d hung up\n", fd);
             } else {
                 perror("recv");
             }
-            close(fd);
-            removeFdFromReactor(fd);
+            close(fd); // Close the client socket
+            removeFdFromReactor(fd); // Remove the client socket from the reactor 
         } else {
             std::istringstream iss(std::string(buf, nbytes));
             std::string command;
@@ -89,10 +92,10 @@ void handle_client_message(int fd) {
 
             if (command == "Newgraph") {
                 int n, m;
-                iss >> n >> m;
-
-                if (n > 0 && m > 0) {
-                    delete ptrGraph;
+                if ( iss >> n >> m && n > 0 && m > 0) {
+                    if(ptrGraph) {
+                       delete ptrGraph;
+                    }
                     ptrGraph = new GraphMatrix(n);
 
                     for (int size = 0; size < m; size++) {
@@ -181,6 +184,14 @@ void handle_client_message(int fd) {
                 send(fd, msg.c_str(), msg.size(), 0);
                 close(fd);
                 removeFdFromReactor(fd);
+
+            } else if (command == "shutdown") {
+                std::cerr << "Shutdown command received, stopping server" << std::endl;
+                removeFdFromReactor(fd);
+                close(fd);
+                stopReactor();
+                return;
+            
             } else {
                 std::string msg = "Invalid command\n";
                 send(fd, msg.c_str(), msg.size(), 0);
@@ -254,6 +265,13 @@ int main(void) {
         std::cerr << "Exception: " << e.what() << std::endl;
     }
 
-    stopReactor();
+    // Main loop to keep the program running
+    while (running) {
+        sleep(1); // Sleep for 1 second
+    }
+
+    close(listener);
+    std::cout << "Server has been shut down." << std::endl;
+
     return 0;
 }
