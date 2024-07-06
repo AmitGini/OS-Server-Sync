@@ -29,6 +29,7 @@ void IOHandler::printOutput(const std::vector<std::vector<int>> &SCCs) {
     for (const auto &component : SCCs) {
         for (size_t compIndex = 0; compIndex < component.size(); compIndex++) {
             std::cout << component[compIndex] + 1; // Adjust back to one-based indexing
+            // Print a space after all but the last element
             if (compIndex != component.size() - 1) std::cout << " ";
         }
         std::cout << std::endl;

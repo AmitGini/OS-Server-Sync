@@ -5,8 +5,7 @@ Newgraph 5 5
 3 4
 4 5
 Kosaraju
-Removeedge
-1 2
+Removeedge 1 2
 Kosaraju
 Newedge 1 2
 Kosaraju

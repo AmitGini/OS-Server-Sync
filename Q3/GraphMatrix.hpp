@@ -10,15 +10,15 @@ class GraphMatrix {
     std::vector<std::vector<int>> adj; // Adjacency matrix for the original graph
     std::vector<std::vector<int>> revAdj; // Adjacency matrix for the reversed graph
 
-    void fillOrder(int v, std::vector<bool> &visited, std::stack<int> &Stack);
-    void DFS(int v, std::vector<bool> &visited, std::vector<int> &component);
+    void fillOrder(int v, std::vector<bool> &visited, std::stack<int> &Stack); // Fill the stack with vertices in increasing order of finishing times
+    void DFS(int v, std::vector<bool> &visited, std::vector<int> &component); // Depth-first search traversal of the graph
 
 public:
-    GraphMatrix(int V);
-    int getSizeV() const;
-    void addEdge(int v, int w);
-    void removeEdge(int v, int w);
-    std::vector<std::vector<int>> getSCCs();
+    GraphMatrix(int V); // Constructor
+    int getSizeV() const; // Return the number of vertices
+    void addEdge(int v, int w); // Add an edge to the graph
+    void removeEdge(int v, int w); // Remove an edge from the graph
+    std::vector<std::vector<int>> getSCCs(); // Return the strongly connected components of the graph
 };
 
 #endif

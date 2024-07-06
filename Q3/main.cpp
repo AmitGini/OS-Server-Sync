@@ -23,15 +23,15 @@ int main() {
         std::cout << "Exit\n" << std::endl;
         std::cout << "Your choice: ";
         std::string input;
-        std::getline(std::cin, input);
+        std::getline(std::cin, input); // Get the entire line of input
 
         if (input.size() >= 12 && input.substr(0, 8) == "Newgraph") {
             int n, m;
 
             try 
             {
-                std::istringstream iss(input.substr(9));
-                iss >> n >> m;
+                std::istringstream iss(input.substr(9)); // Skip the "Newgraph" part
+                iss >> n >> m; // Extract the integers
                 if (n <= 0 || m <= 0) throw std::exception();
             } 
             catch (std::exception &e) 
@@ -44,7 +44,7 @@ int main() {
             ptrGraph = new GraphMatrix(n);
             ioHandler.readInput(*ptrGraph, m);
             // Clear the buffer to handle any leftover input
-            std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+            std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n'); 
         } 
 
         else if (input == "Kosaraju") 
@@ -66,7 +66,7 @@ int main() {
             std::istringstream iss(input.substr(8));
             try 
             {
-                iss >> i >> j;
+                iss >> i >> j; // Extract the integers from the input
                 if (i <= 0 || j <= 0) throw std::exception();
             } 
             catch (std::exception &e) 

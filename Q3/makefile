@@ -19,6 +19,6 @@ GraphMatrix.o: GraphMatrix.cpp GraphMatrix.hpp
 	$(CC) $(CFLAGS) -c GraphMatrix.cpp
 
 clean:
-	rm -f *.o SCC gmon.out
+	rm -f *.o SCC 
 
 .PHONY: all clean
