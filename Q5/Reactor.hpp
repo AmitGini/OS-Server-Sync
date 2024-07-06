@@ -4,15 +4,15 @@
 #include <vector>
 #include <unordered_map>
 #include <poll.h>
-#include <functional>
-#include <pthread.h>
+#include <functional> // for std::function
+#include <pthread.h> // for pthread_t
 
-typedef std::function<void(int)> reactorFunc;
+typedef std::function<void(int)> reactorFunc; 
 
-extern std::vector<pollfd> fds;
-extern std::unordered_map<int, reactorFunc> fd_map;
-extern pthread_t reactor_thread;
-extern bool running;
+extern std::vector<pollfd> fds; // file descriptors to poll for events with poll
+extern std::unordered_map<int, reactorFunc> fd_map; // map of file descriptors to their callbacks
+extern pthread_t reactor_thread; // thread for the reactor
+extern bool running; // flag to stop the reactor
 
 // initializes and starts the reactor in a separate thread.
 void* startReactor();

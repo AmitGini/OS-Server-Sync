@@ -3,7 +3,7 @@ CXX = g++
 CXXFLAGS = -std=c++11 -Wall -pthread
 
 # Source files
-SRCS = demo.cpp reactor.cpp
+SRCS = demo.cpp Reactor.cpp
 
 # Object files
 OBJS = demo.o Reactor.o
