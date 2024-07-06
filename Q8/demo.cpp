@@ -27,19 +27,23 @@ void* handleClient(int client_fd) {
     if (bytes_received <= 0) {
         if (bytes_received == 0) {
             std::cout << "Client disconnected, fd: " << client_fd << std::endl;
+        } else {
+            perror("recv");
+        }
             removeFdFromReactor(client_fd); // Remove client from Reactor
             close(client_fd);
             return nullptr;
-
-        } else {
-            perror("recv");
-            return nullptr;
-        }
     }
     
     buffer[bytes_received] = '\0';
     std::string message = buffer;
     std::cout << "Received: " << buffer;
+    if (message == "Exit\n" || message == "Exit\r\n") {
+            std::cerr << "Client on socket "<<client_fd<<" sent exit command, disconnecting" << std::endl;
+            removeFdFromReactor(client_fd);
+            close(client_fd);
+            return nullptr;
+    }
 
     std::string response = "Server received your message: ";
     response += message;
@@ -50,7 +54,7 @@ void* handleClient(int client_fd) {
 }
 
 int main() {
-    signal(SIGINT, handle_sigint); // Register signal handler
+    signal(SIGINT, handle_sigint); // Register signal handler if user presses Ctrl+C
 
     int listener_fd = socket(AF_INET, SOCK_STREAM, 0);
     if (listener_fd == -1) {
@@ -97,7 +101,6 @@ int main() {
     std::cout << "Stopping Proactor" << std::endl;
     stopProactor(proactor_thread);
 
-    std::cout << "Stopping Reactor" << std::endl;
     stopReactor();
 
     close(listener_fd);

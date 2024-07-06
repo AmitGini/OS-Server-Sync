@@ -24,8 +24,8 @@ void* acceptConnections(void* arg) {
     int newfd;
     try {
         struct Data* data = reinterpret_cast<Data*>(arg); // Cast the argument to Data*
-        int listen_fd = data->fd; // Declare and initialize sockfd variable
-        proactorFunc function = data->func;
+        int listen_fd = data->fd; // Declare and initialize listen_fd
+        proactorFunc function = data->func; // Declare and initialize function
 
         while (!stop_server) {  // Added stop_server check
             struct sockaddr_storage remoteaddr;
@@ -65,7 +65,7 @@ void* acceptConnections(void* arg) {
 
 pthread_t startProactor(int listenfd, proactorFunc threadFunc) {
     pthread_t threadId;
-    Data* data = new Data{listenfd, threadFunc};
+    Data* data = new Data{listenfd, threadFunc}; 
     pthread_create(&threadId, nullptr, acceptConnections, data);
 
     // Start the Reactor

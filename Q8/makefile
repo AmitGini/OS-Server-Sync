@@ -17,10 +17,10 @@ all: $(TARGET)
 $(TARGET): $(OBJS)
 	$(CXX) $(CXXFLAGS) -o $(TARGET) $(OBJS)
 
-demo.o: demo.cpp Reactor.hpp 
+demo.o: demo.cpp Reactor.hpp Proactor.hpp
 	$(CXX) $(CXXFLAGS) -c demo.cpp
 
-Reactor.o: Reactor.cpp Reactor.hpp 
+Reactor.o: Reactor.cpp Reactor.hpp
 	$(CXX) $(CXXFLAGS) -c Reactor.cpp
 
 Proactor.o: Proactor.cpp Proactor.hpp 
