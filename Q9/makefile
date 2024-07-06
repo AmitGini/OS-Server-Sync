@@ -26,7 +26,6 @@ Reactor.o: Reactor.cpp Reactor.hpp
 Proactor.o: Proactor.cpp Proactor.hpp 
 	$(CXX) $(CXXFLAGS) -c Proactor.cpp
 
-
 # Clean rule
 .PHONY: all clean
 clean:
